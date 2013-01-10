@@ -130,6 +130,14 @@ class UpdateRefsError(GitProtocolError):
         Exception.__init__(self, *args, **kwargs)
 
 
+class RemoteReadFailure(GitProtocolError):
+    """Remote repository read failure."""
+
+    def __init__(self):
+        Exception.__init__(self,
+                "Could not read from remote repository.")
+
+
 class HangupException(GitProtocolError):
     """Hangup exception."""
 

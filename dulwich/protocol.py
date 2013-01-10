@@ -24,6 +24,7 @@ import socket
 
 from dulwich.errors import (
     HangupException,
+    RemoteReadFailure,
     GitProtocolError,
     )
 from dulwich._compat import (
@@ -144,7 +145,10 @@ class Protocol(object):
 
         :return: Yields each line of data up to but not including the next flush-pkt.
         """
-        pkt = self.read_pkt_line()
+        try:
+            pkt = self.read_pkt_line()
+        except HangupException:
+            raise RemoteReadFailure()
         while pkt:
             yield pkt
             pkt = self.read_pkt_line()
