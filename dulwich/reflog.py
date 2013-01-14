@@ -24,7 +24,36 @@ from dulwich.file import GitFile
 from dulwich.objects import parse_timezone, format_timezone
 
 
-class ReflogFile(list):
+class ReflogList(list):
+
+    def __init__(self, repo, ref):
+        self._repo = repo
+
+    def get_sha_by_index(self, index):
+        if index == 0:
+            return self[0]['new']
+        else:
+            return self[index - 1]['old']
+
+    def add_entry(self, old_sha, new_sha, user, time, timezone, message):
+        self.insert(0, {
+            'old': old_sha,
+            'new': new_sha,
+            'user': user,
+            'time': time,
+            'timezone': timezone,
+            'timezone_neg': False,
+            'msg': message})
+
+    def delete_entry(self, index, rewrite=False):
+        if rewrite and index != 0:
+            if index == len(self) - 1:
+                self[index - 1]['old'] = self[index]['old']
+            else:
+                self[index - 1]['old'] = self[index + 1]['new']
+        del self[index]
+
+class ReflogFile(ReflogList):
 
     def _parse_file(self):
         """Parse a reflog file."""
