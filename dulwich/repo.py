@@ -1277,7 +1277,7 @@ class Repo(BaseRepo):
         finally:
             f.close()
 
-    def get_named_file(self, path):
+    def get_named_file(self, path, create=False):
         """Get a file from the control dir with a specific name.
 
         Although the filename should be interpreted as a filename relative to
@@ -1289,11 +1289,16 @@ class Repo(BaseRepo):
         """
         # TODO(dborowitz): sanitize filenames, since this is used directly by
         # the dumb web serving code.
-        path = path.lstrip(os.path.sep)
+        abspath = os.path.join(self.controldir(), path.lstrip(os.path.sep))
         try:
-            return open(os.path.join(self.controldir(), path), 'rb')
+            return open(abspath, 'rb')
+            raise
         except (IOError, OSError), e:
             if e.errno == errno.ENOENT:
+                if create:
+                    os.makedirs(os.path.dirname(abspath))
+                    self._put_named_file(path, "")
+                    return self.get_named_file(path)
                 return None
             raise
 
