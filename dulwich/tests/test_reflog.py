@@ -27,6 +27,7 @@ from dulwich.repo import (
         Repo,
         )
 from dulwich.reflog import (
+        Reflog,
         ReflogFile,
         )
 
@@ -126,6 +127,10 @@ class ReflogListTests(TestCase):
         for i in range(5+1):
             self.assertEqual(self._shas[5 - i], rl.get_sha_by_index(i))
 
+    def test_shas(self):
+        rl = self.new_reflog()
+        self.assertEqual(self._shas, list(reversed(rl.shas())))
+
     def test_add_entry(self):
         rl = ReflogFile()
 
@@ -173,3 +178,139 @@ class ReflogListTests(TestCase):
 
         rl.delete_entry(0, True)
         self.assertEqual(ReflogFile(), rl)
+
+
+class ReflogTests(TestCase):
+
+    committer='Test Committer <test@nodomain.com>'
+    author='Test Author <test@nodomain.com>'
+
+    def setUp(self):
+        super(ReflogTests, self).setUp()
+
+        repo_dir = os.path.join(tempfile.mkdtemp())
+        r = self._repo = Repo.init(repo_dir)
+
+        self._shas = []
+        reflog = ""
+
+        self._oldsha = "0" * 40
+        self._newsha = r.do_commit(
+                "0", committer=self.committer, author=self.author,
+                commit_timestamp=0, commit_timezone=0,
+                author_timestamp=0, author_timezone=0)
+
+        rl = ReflogFile()
+        rl.add_entry(self._oldsha, self._newsha,
+                     self.committer, 0, 0, "0")
+        self._reflog = Reflog(r)
+        self._reflog._reflogs = { "refs/heads/master": rl }
+
+    def test_get_sha_by_index(self):
+        rl = self._reflog
+
+        self.assertEquals(self._newsha,
+                          rl.get_sha_by_index("refs/heads/master", 0))
+        self.assertEquals(self._oldsha,
+                          rl.get_sha_by_index("refs/heads/master", 1))
+        self.assertRaises(KeyError, lambda: rl.get_sha_by_index("ENOENT", 0))
+
+    def test_walk(self):
+        r = self._repo
+        rl = self._reflog
+
+        shas = [ rl.get_sha_by_index("refs/heads/master", 0)]
+        for i in range(4):
+            commit = r.do_commit(str(i + 1),
+                                 committer=self.committer, author=self.author,
+                                 commit_timestamp=i + 1, commit_timezone=0,
+                                 author_timestamp=i + 1, author_timezone=0)
+            rl.add_entry("refs/heads/master", shas[i], commit,
+                         self.committer, i + 1, 0, i + 1)
+            shas.append(commit)
+        self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
+
+        self.assertEquals(
+                list(reversed(shas)),
+                [entry.commit.id for entry in rl.walk("refs/heads/master")])
+
+    def test_log_by_index(self):
+        rl = self._reflog
+
+        self.assertEqual({
+            'old': self._oldsha,
+            'new': self._newsha,
+            'user': self.committer,
+            'time': 0,
+            'timezone': 0,
+            'timezone_neg': False,
+            'msg': "0"}, rl.get_log_by_index("refs/heads/master", 0))
+
+
+    def test_add_entry(self):
+        r = self._repo
+        rl = self._reflog
+
+        commit = r.do_commit("1",
+                             committer=self.committer, author=self.author,
+                             commit_timestamp=1, commit_timezone=0,
+                             author_timestamp=1, author_timezone=0)
+        rl.add_entry("refs/heads/master", self._newsha, commit,
+                     self.committer, 1, 1, "1")
+
+        self.assertEquals(commit,
+                          rl.get_sha_by_index("refs/heads/master", 0))
+        self.assertEquals(self._newsha,
+                          rl.get_sha_by_index("refs/heads/master", 1))
+        self.assertEquals(self._oldsha,
+                          rl.get_sha_by_index("refs/heads/master", 2))
+
+    def test_delete_entry(self):
+        r = self._repo
+        rl = self._reflog
+
+        shas = [ self._oldsha, rl.get_sha_by_index("refs/heads/master", 0)]
+        for i in range(4):
+            commit = r.do_commit(str(i + 2),
+                                 committer=self.committer, author=self.author,
+                                 commit_timestamp=i + 2, commit_timezone=0,
+                                 author_timestamp=i + 2, author_timezone=0)
+            rl.add_entry("refs/heads/master", shas[i], commit,
+                         self.committer, i + 2, 0, i + 2)
+            shas.append(commit)
+        self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
+
+        # 5 commits, 6 shas, 5 log entries
+        for i in range(5):
+            rl.delete_entry("refs/heads/master", 0)
+
+        self.assertEquals(0, len(rl._reflogs["refs/heads/master"]))
+        self.assertEquals(shas[5], rl.get_sha_by_index("refs/heads/master", 0))
+        self.assertRaises(
+                IndexError,
+                lambda: rl.get_sha_by_index("refs/heads/master", 1))
+
+        rl.add_entry("refs/heads/master", self._oldsha, self._newsha,
+                     self.committer, 0, 0, "1")
+        for i in range(4):
+            rl.add_entry("refs/heads/master", shas[i + 1], shas[i + 2],
+                         self.committer, i + 1, 0, i + 1)
+        self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
+
+        for i in range(4):
+            self.assertEqual({
+                'old': shas[4 - i],
+                'new': shas[5],
+                'user': self.committer,
+                'time': 4,
+                'timezone': 0,
+                'timezone_neg': False,
+                'msg': "4"}, rl.get_log_by_index("refs/heads/master", 0))
+
+            rl.delete_entry("refs/heads/master", 1, True)
+        self.assertEquals(1, len(rl._reflogs["refs/heads/master"]))
+
+        rl.delete_entry("refs/heads/master", 0, True)
+        self.assertRaises(
+                IndexError,
+                lambda: rl.get_log_by_index("refs/heads/master", 0))

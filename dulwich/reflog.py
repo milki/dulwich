@@ -18,22 +18,84 @@
 
 """Tracking Reference History"""
 
+import os
 import re
+import collections
+import itertools
 
 from dulwich.file import GitFile
 from dulwich.objects import parse_timezone, format_timezone
+from dulwich.walk import (
+    ORDER_NONE,
+    WalkEntry,
+    Walker,
+    )
+from dulwich.protocol import (
+    ZERO_SHA,
+    )
+from dulwich.errors import (
+    MissingCommitError,
+    )
+
+
+class Reflog(object):
+    """A reflog."""
+
+    def __init__(self, repo):
+        self._repo = repo
+        self._reflogs = {}
+
+    def _valid_ref(self, ref):
+        if ref in self._repo:
+            return ref
+        raise KeyError(ref)
+
+    def get_sha_by_index(self, ref, index):
+        ref = self._valid_ref(ref)
+
+        if index == 0:
+            return self._repo[ref].id
+
+        rl = self._get_reflog(ref)
+        return rl.get_sha_by_index(index)
+
+    def get_log_by_index(self, ref, index):
+        ref = self._valid_ref(ref)
+
+        rl = self._get_reflog(ref)
+        return rl[index]
+
+    def add_entry(self, ref, old_sha, new_sha, user, time, timezone, message):
+        rl = self._get_reflog(ref)
+        rl.add_entry(old_sha, new_sha, user, time, timezone, message)
+
+    def delete_entry(self, ref, index, rewrite=False):
+        rl = self._get_reflog(ref)
+        rl.delete_entry(index, rewrite)
+
+    def walk(self, ref):
+        rl = self._get_reflog(ref)
+
+        return Walker(self._repo.object_store, rl.shas(), order=ORDER_NONE, queue_cls=_ReflogQueue)
+
+    def _get_reflog(self, ref):
+        ref = self._valid_ref(ref)
+
+        if ref not in self._reflogs and ref in self._repo:
+            f = self._repo.get_named_file(os.path.join("logs", ref), True)
+            self._reflogs[ref] = ReflogFile.from_file(f)
+        return self._reflogs[ref]
 
 
 class ReflogList(list):
 
-    def __init__(self, repo, ref):
-        self._repo = repo
-
     def get_sha_by_index(self, index):
         if index == 0:
             return self[0]['new']
-        else:
-            return self[index - 1]['old']
+        return self[index - 1]['old']
+
+    def shas(self):
+        return [self[0]['new']] + [entry['old'] for entry in self]
 
     def add_entry(self, old_sha, new_sha, user, time, timezone, message):
         self.insert(0, {
@@ -43,7 +105,7 @@ class ReflogList(list):
             'time': time,
             'timezone': timezone,
             'timezone_neg': False,
-            'msg': message})
+            'msg': str(message)})
 
     def delete_entry(self, index, rewrite=False):
         if rewrite and index != 0:
@@ -118,3 +180,31 @@ class ReflogFile(ReflogList):
                                                   log['timezone'],
                                                   log['timezone_neg']),
                                               log['msg']))
+
+
+class _ReflogQueue(object):
+    """Queue of WalkEntry objects in given order."""
+
+    def __init__(self, walker):
+        self._walker = walker
+        self._store = walker.store
+        self._pq = collections.deque()
+        self._is_finished = False
+
+        for commit_id in itertools.chain(walker.include):
+            self._push(commit_id)
+
+    def _push(self, commit_id):
+        try:
+            commit = self._store[commit_id]
+        except KeyError:
+            if commit_id == ZERO_SHA:
+                return
+            raise MissingCommitError(commit_id)
+        self._pq.append(commit)
+
+    def next(self):
+        try:
+            return WalkEntry(self._walker, self._pq.popleft())
+        except IndexError:
+            return None

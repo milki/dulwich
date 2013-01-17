@@ -67,6 +67,8 @@ REFSDIR = 'refs'
 REFSDIR_TAGS = 'tags'
 REFSDIR_HEADS = 'heads'
 INDEX_FILENAME = "index"
+LOGSDIR = 'logs'
+LOGSDIR_HEADS = 'heads'
 
 BASE_DIRECTORIES = [
     ["branches"],
@@ -74,7 +76,9 @@ BASE_DIRECTORIES = [
     [REFSDIR, REFSDIR_TAGS],
     [REFSDIR, REFSDIR_HEADS],
     ["hooks"],
-    ["info"]
+    ["info"],
+    [LOGSDIR],
+    [LOGSDIR, LOGSDIR_HEADS],
     ]
 
 
