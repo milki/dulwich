@@ -42,6 +42,8 @@ from dulwich.errors import (
 class Reflog(object):
     """A reflog."""
 
+    # TODO: Support date lookups
+
     def __init__(self, repo):
         self._repo = repo
         self._reflogs = {}
@@ -121,6 +123,7 @@ class ReflogFile(ReflogList):
     def _parse_file(self):
         """Parse a reflog file."""
 
+        # refs.c: old SP new SP name <email> SP time TAB msg LF
         regex = re.compile('(?P<old>\w{40})\s(?P<new>\w{40})\s'
                            '(?P<user>.*<.*>)\s'
                            '(?P<timetext>\d+)\s'
