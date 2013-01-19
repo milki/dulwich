@@ -35,6 +35,7 @@ from dulwich.protocol import (
     )
 from dulwich.errors import (
     MissingCommitError,
+    RefFormatError,
     )
 
 
@@ -48,7 +49,7 @@ class Reflog(object):
     def _valid_ref(self, ref):
         if ref in self._repo:
             return ref
-        raise KeyError(ref)
+        raise RefFormatError(ref)
 
     def get_sha_by_index(self, ref, index):
         ref = self._valid_ref(ref)

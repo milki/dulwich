@@ -30,6 +30,9 @@ from dulwich.reflog import (
     Reflog,
     ReflogFile,
 )
+from dulwich.errors import (
+    RefFormatError,
+)
 
 from dulwich.tests import TestCase
 
@@ -222,7 +225,9 @@ class ReflogTests(TestCase):
                           rl.get_sha_by_index("refs/heads/master", 0))
         self.assertEquals(self._oldsha,
                           rl.get_sha_by_index("refs/heads/master", 1))
-        self.assertRaises(KeyError, lambda: rl.get_sha_by_index("ENOENT", 0))
+        self.assertRaises(
+            RefFormatError,
+            lambda: rl.get_sha_by_index("ENOENT", 0))
 
     def test_walk(self):
         r = self._repo
