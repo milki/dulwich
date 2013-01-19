@@ -29,14 +29,14 @@ from dulwich.walk import (
     ORDER_NONE,
     WalkEntry,
     Walker,
-    )
+)
 from dulwich.protocol import (
     ZERO_SHA,
-    )
+)
 from dulwich.errors import (
     MissingCommitError,
     RefFormatError,
-    )
+)
 
 
 class Reflog(object):
@@ -79,7 +79,8 @@ class Reflog(object):
     def walk(self, ref):
         rl = self._get_reflog(ref)
 
-        return Walker(self._repo.object_store, rl.shas(), order=ORDER_NONE, queue_cls=_ReflogQueue)
+        return Walker(self._repo.object_store,
+                      rl.shas(), order=ORDER_NONE, queue_cls=_ReflogQueue)
 
     def _get_reflog(self, ref):
         ref = self._valid_ref(ref)
@@ -102,12 +103,8 @@ class ReflogList(list):
 
     def add_entry(self, old_sha, new_sha, user, time, timezone, message):
         self.insert(0, {
-            'old': old_sha,
-            'new': new_sha,
-            'user': user,
-            'time': time,
-            'timezone': timezone,
-            'timezone_neg': False,
+            'old': old_sha, 'new': new_sha, 'user': user,
+            'time': time, 'timezone': timezone, 'timezone_neg': False,
             'msg': str(message)})
 
     def delete_entry(self, index, rewrite=False):
@@ -117,6 +114,7 @@ class ReflogList(list):
             else:
                 self[index - 1]['old'] = self[index + 1]['new']
         del self[index]
+
 
 class ReflogFile(ReflogList):
 
@@ -176,14 +174,10 @@ class ReflogFile(ReflogList):
 
     def write_to_file(self, f):
         for log in reversed(self):
-            f.write("%s %s %s %s %s\t%s\n" % (log['old'],
-                                              log['new'],
-                                              log['user'],
-                                              log['time'],
-                                              format_timezone(
-                                                  log['timezone'],
-                                                  log['timezone_neg']),
-                                              log['msg']))
+            f.write("%s %s %s %s %s\t%s\n" % (
+                log['old'], log['new'], log['user'], log['time'],
+                format_timezone(log['timezone'], log['timezone_neg']),
+                log['msg']))
 
 
 class _ReflogQueue(object):
