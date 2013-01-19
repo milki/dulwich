@@ -24,12 +24,12 @@ import tempfile
 import os
 
 from dulwich.repo import (
-        Repo,
-        )
+    Repo,
+)
 from dulwich.reflog import (
-        Reflog,
-        ReflogFile,
-        )
+    Reflog,
+    ReflogFile,
+)
 
 from dulwich.tests import TestCase
 
@@ -39,6 +39,10 @@ cac0cab538b970a37ea1e769cbbde608743bc96d 1a410efbd13591db07496601ebc7a059dd55cfe
 1a410efbd13591db07496601ebc7a059dd55cfe9 484a59275031909e19aadb7c92262719cfcdf19a Scott Chacon <schacon@gmail.com> 1243041024 -0700\tadded repo.rb
 484a59275031909e19aadb7c92262719cfcdf19a ab1afef80fac8e34258ff41fc1b867c702daa24b Scott Chacon <schacon@gmail.com> 1243041000 -0700\tmodified repo a bit
 """
+
+committer = 'Test Committer <test@nodomain.com>'
+author = 'Test Author <test@nodomain.com>'
+
 
 class ReflogFileTests(TestCase):
 
@@ -67,9 +71,6 @@ class ReflogFileTests(TestCase):
 
 class ReflogListTests(TestCase):
 
-    committer='Test Committer <test@nodomain.com>'
-    author='Test Author <test@nodomain.com>'
-
     def setUp(self):
         super(ReflogListTests, self).setUp()
 
@@ -84,17 +85,29 @@ class ReflogListTests(TestCase):
 
         self._shas = [oldsha]
         for i in range(5):
-            newsha = r.do_commit(str(i),
-                                 committer=self.committer, author=self.author,
-                                 commit_timestamp=i, commit_timezone=0,
-                                 author_timestamp=i, author_timezone=0)
+            newsha = self._make_commit(i)
             reflog += "%s %s %s %d +%04d\t%s\n" % (oldsha, newsha,
-                                                   self.committer, i, 0, i)
+                                                   committer, i, 0, i)
             self.assertEquals(r["refs/heads/master"].id, newsha)
             self._shas.append(newsha)
             oldsha = newsha
 
         self._reflog = reflog
+
+    def _make_commit(self, i):
+        return self._repo.do_commit(
+            str(i),
+            committer=committer, author=author,
+            commit_timestamp=i, commit_timezone=0,
+            author_timestamp=i, author_timezone=0)
+
+    def assertLogEntry(self, expected, entry):
+        meta = {'user': committer,
+                'timezone': 0,
+                'timezone_neg': False,
+                }
+        expected.update(meta)
+        self.assertEquals(expected, entry)
 
     def new_reflog(self):
         rl = ReflogFile.from_file(StringIO(self._reflog))
@@ -104,22 +117,11 @@ class ReflogListTests(TestCase):
 
     def test_getitem(self):
         rl = self.new_reflog()
-        self.assertEqual({
-            'old': self._shas[4],
-            'new': self._shas[5],
-            'user': self.committer,
-            'time': 4,
-            'timezone': 0,
-            'timezone_neg': False,
-            'msg': "4"}, rl[0])
-        self.assertEqual({
-            'old': self._shas[0],
-            'new': self._shas[1],
-            'user': self.committer,
-            'time': 0,
-            'timezone': 0,
-            'timezone_neg': False,
-            'msg': "0"}, rl[4])
+        for i in range(5):
+            self.assertLogEntry(
+                {'old': self._shas[i], 'new': self._shas[i + 1],
+                 'time': i, 'msg': str(i)},
+                rl[4 - i])
         self.assertRaises(IndexError, lambda: rl[10])
 
     def test_get_sha_by_index(self):
@@ -155,35 +157,22 @@ class ReflogListTests(TestCase):
 
         rl = self.new_reflog()
         for i in range(4):
-
-            self.assertEqual({
-                'old': self._shas[4 - i],
-                'new': self._shas[5],
-                'user': self.committer,
-                'time': 4,
-                'timezone': 0,
-                'timezone_neg': False,
-                'msg': "4"}, rl[0])
+            self.assertLogEntry(
+                {'old': self._shas[4 - i], 'new': self._shas[5],
+                 'time': 4, 'msg': "4"},
+                rl[0])
 
             rl.delete_entry(1, True)
-
-        self.assertEqual({
-            'old': self._shas[0],
-            'new': self._shas[5],
-            'user': self.committer,
-            'time': 4,
-            'timezone': 0,
-            'timezone_neg': False,
-            'msg': "4"}, rl[0])
+        self.assertLogEntry(
+            {'old': self._shas[0], 'new': self._shas[5],
+             'time': 4, 'msg': "4"},
+            rl[0])
 
         rl.delete_entry(0, True)
         self.assertEqual(ReflogFile(), rl)
 
 
 class ReflogTests(TestCase):
-
-    committer='Test Committer <test@nodomain.com>'
-    author='Test Author <test@nodomain.com>'
 
     def setUp(self):
         super(ReflogTests, self).setUp()
@@ -196,15 +185,35 @@ class ReflogTests(TestCase):
 
         self._oldsha = "0" * 40
         self._newsha = r.do_commit(
-                "0", committer=self.committer, author=self.author,
-                commit_timestamp=0, commit_timezone=0,
-                author_timestamp=0, author_timezone=0)
+            "0", committer=committer, author=author,
+            commit_timestamp=0, commit_timezone=0,
+            author_timestamp=0, author_timezone=0)
 
         rl = ReflogFile()
         rl.add_entry(self._oldsha, self._newsha,
-                     self.committer, 0, 0, "0")
+                     committer, 0, 0, "0")
         self._reflog = Reflog(r)
-        self._reflog._reflogs = { "refs/heads/master": rl }
+        self._reflog._reflogs = {"refs/heads/master": rl}
+
+    def _make_commit(self, i):
+        rl = self._reflog
+
+        oldsha = rl.get_sha_by_index("refs/heads/master", 0)
+        newsha = self._repo.do_commit(
+            str(i), committer=committer, author=author,
+            commit_timestamp=i, commit_timezone=0,
+            author_timestamp=i, author_timezone=0)
+        rl.add_entry("refs/heads/master", oldsha, newsha,
+                     committer, i + 1, 0, i + 1)
+        return newsha
+
+    def assertLogEntry(self, expected, entry):
+        meta = {'user': committer,
+                'timezone': 0,
+                'timezone_neg': False,
+                }
+        expected.update(meta)
+        self.assertEquals(expected, entry)
 
     def test_get_sha_by_index(self):
         rl = self._reflog
@@ -219,20 +228,14 @@ class ReflogTests(TestCase):
         r = self._repo
         rl = self._reflog
 
-        shas = [ rl.get_sha_by_index("refs/heads/master", 0)]
+        shas = [rl.get_sha_by_index("refs/heads/master", 0)]
         for i in range(4):
-            commit = r.do_commit(str(i + 1),
-                                 committer=self.committer, author=self.author,
-                                 commit_timestamp=i + 1, commit_timezone=0,
-                                 author_timestamp=i + 1, author_timezone=0)
-            rl.add_entry("refs/heads/master", shas[i], commit,
-                         self.committer, i + 1, 0, i + 1)
-            shas.append(commit)
+            shas.append(self._make_commit(i+1))
         self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
 
         self.assertEquals(
-                list(reversed(shas)),
-                [entry.commit.id for entry in rl.walk("refs/heads/master")])
+            list(reversed(shas)),
+            [entry.commit.id for entry in rl.walk("refs/heads/master")])
 
     def test_log_by_index(self):
         rl = self._reflog
@@ -240,23 +243,17 @@ class ReflogTests(TestCase):
         self.assertEqual({
             'old': self._oldsha,
             'new': self._newsha,
-            'user': self.committer,
+            'user': committer,
             'time': 0,
             'timezone': 0,
             'timezone_neg': False,
             'msg': "0"}, rl.get_log_by_index("refs/heads/master", 0))
 
-
     def test_add_entry(self):
         r = self._repo
         rl = self._reflog
 
-        commit = r.do_commit("1",
-                             committer=self.committer, author=self.author,
-                             commit_timestamp=1, commit_timezone=0,
-                             author_timestamp=1, author_timezone=0)
-        rl.add_entry("refs/heads/master", self._newsha, commit,
-                     self.committer, 1, 1, "1")
+        commit = self._make_commit(1)
 
         self.assertEquals(commit,
                           rl.get_sha_by_index("refs/heads/master", 0))
@@ -269,14 +266,9 @@ class ReflogTests(TestCase):
         r = self._repo
         rl = self._reflog
 
-        shas = [ self._oldsha, rl.get_sha_by_index("refs/heads/master", 0)]
+        shas = [self._oldsha, rl.get_sha_by_index("refs/heads/master", 0)]
         for i in range(4):
-            commit = r.do_commit(str(i + 2),
-                                 committer=self.committer, author=self.author,
-                                 commit_timestamp=i + 2, commit_timezone=0,
-                                 author_timestamp=i + 2, author_timezone=0)
-            rl.add_entry("refs/heads/master", shas[i], commit,
-                         self.committer, i + 2, 0, i + 2)
+            commit = self._make_commit(i+2)
             shas.append(commit)
         self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
 
@@ -287,30 +279,26 @@ class ReflogTests(TestCase):
         self.assertEquals(0, len(rl._reflogs["refs/heads/master"]))
         self.assertEquals(shas[5], rl.get_sha_by_index("refs/heads/master", 0))
         self.assertRaises(
-                IndexError,
-                lambda: rl.get_sha_by_index("refs/heads/master", 1))
+            IndexError,
+            lambda: rl.get_sha_by_index("refs/heads/master", 1))
 
         rl.add_entry("refs/heads/master", self._oldsha, self._newsha,
-                     self.committer, 0, 0, "1")
+                     committer, 0, 0, "1")
         for i in range(4):
             rl.add_entry("refs/heads/master", shas[i + 1], shas[i + 2],
-                         self.committer, i + 1, 0, i + 1)
+                         committer, i + 1, 0, i + 1)
         self.assertEquals(5, len(rl._reflogs["refs/heads/master"]))
 
         for i in range(4):
-            self.assertEqual({
-                'old': shas[4 - i],
-                'new': shas[5],
-                'user': self.committer,
-                'time': 4,
-                'timezone': 0,
-                'timezone_neg': False,
-                'msg': "4"}, rl.get_log_by_index("refs/heads/master", 0))
+            self.assertLogEntry(
+                {'old': shas[4 - i], 'new': shas[5],
+                 'time': 4, 'msg': "4"},
+                rl.get_log_by_index("refs/heads/master", 0))
 
             rl.delete_entry("refs/heads/master", 1, True)
         self.assertEquals(1, len(rl._reflogs["refs/heads/master"]))
 
         rl.delete_entry("refs/heads/master", 0, True)
         self.assertRaises(
-                IndexError,
-                lambda: rl.get_log_by_index("refs/heads/master", 0))
+            IndexError,
+            lambda: rl.get_log_by_index("refs/heads/master", 0))
