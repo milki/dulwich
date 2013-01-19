@@ -43,8 +43,9 @@ from dulwich.errors import (
 
 ORDER_DATE = 'date'
 ORDER_TOPO = 'topo'
+ORDER_NONE = 'none'
 
-ALL_ORDERS = (ORDER_DATE, ORDER_TOPO)
+ALL_ORDERS = (ORDER_DATE, ORDER_TOPO, ORDER_NONE)
 
 # Maximum number of commits to walk past a commit time boundary.
 _MAX_EXTRA_COMMITS = 5
