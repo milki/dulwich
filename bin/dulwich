@@ -201,6 +201,20 @@ def cmd_commit(args):
                           os.getenv("GIT_AUTHOR_EMAIL"))
     r.do_commit(committer=committer, author=author, message=opts["--message"])
 
+def cmd_ls_remote(args):
+    opts, args = getopt(args, "", ["remote"])
+    opts = dict(opts)
+
+    if '--remote' in opts:
+        remote_url = opts["--remote"]
+    else:
+        # extract from configs
+        pass
+
+    mem_object_store = MemoryObjectStore()
+    if remote.url.begins_with('
+
+
 
 def cmd_update_server_info(args):
     r = Repo(".")
